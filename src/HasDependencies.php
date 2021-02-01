@@ -13,7 +13,7 @@ use Laravel\Nova\Fields\MorphTo;
 trait HasDependencies
 {
     protected $childFieldsArr = [];
-    
+
     /**
      * @param NovaRequest $request
      * @return FieldCollection|\Illuminate\Support\Collection
@@ -27,7 +27,8 @@ trait HasDependencies
         foreach ($fields as $field) {
             if ($field instanceof NovaDependencyContainer) {
                 $availableFields[] = $this->filterFieldForRequest($field, $request);
-                if($field->areDependenciesSatisfied($request) || $this->extractableRequest($request, $this->model())) {
+                if($field->areDependenciesSatisfiedUsingModel($this->model())
+                    || $this->extractableRequest($request, $this->model())) {
                     if ($this->doesRouteRequireChildFields()) {
                         $this->extractChildFields($field->meta['fields']);
                     }

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Laravel\Nova\Fields\Field;
 use Laravel\Nova\Http\Requests\NovaRequest;
 use Illuminate\Support\Str;
+use Laravel\Nova\Nova;
 
 class NovaDependencyContainer extends Field
 {
@@ -151,30 +152,36 @@ class NovaDependencyContainer extends Field
 
         foreach ($this->meta['dependencies'] as $index => $dependency) {
 
+            if ($resource instanceof Model) {
+                $value = $this->getModelValue($resource, $dependency);
+            } else {
+                $value = $resource->{$dependency['property']};
+            }
+
             $this->meta['dependencies'][$index]['satisfied'] = false;
 
-            if (array_key_exists('empty', $dependency) && empty($resource->{$dependency['property']})) {
+            if (array_key_exists('empty', $dependency) && empty($value)) {
                 $this->meta['dependencies'][$index]['satisfied'] = true;
                 continue;
             }
             // inverted `empty()`
-            if (array_key_exists('notEmpty', $dependency) && !empty($resource->{$dependency['property']})) {
+            if (array_key_exists('notEmpty', $dependency) && !empty($value)) {
                 $this->meta['dependencies'][$index]['satisfied'] = true;
                 continue;
             }
             // inverted
-            if (array_key_exists('nullOrZero', $dependency) && in_array($resource->{$dependency['property']}, [null, 0, '0'], true)) {
+            if (array_key_exists('nullOrZero', $dependency) && in_array($value, [null, 0, '0'], true)) {
                 $this->meta['dependencies'][$index]['satisfied'] = true;
                 continue;
             }
 
-            if (array_key_exists('not', $dependency) && $resource->{$dependency['property']} != $dependency['not']) {
+            if (array_key_exists('not', $dependency) && $value != $dependency['not']) {
                 $this->meta['dependencies'][$index]['satisfied'] = true;
                 continue;
             }
 
             if (array_key_exists('value', $dependency)) {
-                if ($dependency['value'] == $resource->{$dependency['property']}) {
+                if ($dependency['value'] == $value) {
                     $this->meta['dependencies'][$index]['satisfied'] = true;
                     continue;
                 }
@@ -218,6 +225,58 @@ class NovaDependencyContainer extends Field
         foreach($this->meta['fields'] as $field) {
             $field->fill($request, $model);
         }
+    }
+
+    public function areDependenciesSatisfiedUsingModel(Model $model)
+    {
+        if (!isset($this->meta['dependencies'])
+            || !is_array($this->meta['dependencies'])) {
+            return false;
+        }
+
+        if (!$model->getKey()) {
+            return false;
+        }
+
+        $satisfiedCounts = 0;
+        foreach ($this->meta['dependencies'] as $index => $dependency) {
+
+            $value = $this->getModelValue($model, $dependency);
+
+            if (array_key_exists('empty', $dependency) && empty($value)) {
+                $satisfiedCounts++;
+            }
+
+            if (array_key_exists('notEmpty', $dependency) && !empty($value)) {
+                $satisfiedCounts++;
+            }
+
+            // inverted
+            if (array_key_exists('nullOrZero', $dependency) && in_array($value, [null, 0, '0'], true)) {
+                $satisfiedCounts++;
+            }
+
+            if (array_key_exists('not', $dependency) && $dependency['not'] != $value) {
+                $satisfiedCounts++;
+            }
+
+            if (array_key_exists('value', $dependency) && $dependency['value'] == $value) {
+                $satisfiedCounts++;
+            }
+        }
+
+        return $satisfiedCounts == count($this->meta['dependencies']);
+    }
+
+    protected function getModelValue(Model $model, array $dependency)
+    {
+        $field = isset($model->{$dependency['field']}) ? $model->{$dependency['field']} : null;
+        if (!$field) {
+            return $field;
+        }
+        return isset($dependency['property']) && isset($field->{$dependency['property']})
+            ? $field->{$dependency['property']}
+            : null;
     }
 
     /**

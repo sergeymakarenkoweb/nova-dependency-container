@@ -44,18 +44,17 @@
 
 						// @todo: change `findWatchableComponentAttribute` to return initial state(s) of current dependency.
 						let attribute = this.findWatchableComponentAttribute(component),
-							initial_value = component.field.value; // @note: quick-fix for issue #88
-
-						component.$watch(attribute, (value) => {
-							// @todo: move to reactive factory
-							if (attribute === 'selectedResource') {
-								value = (value && value.value) || null;
-							}
-							this.dependencyValues[component.field.attribute] = value;
+							initial_value = this.getInitValue(component); // @note: quick-fix for issue #88
+                        let self = this;
+						component.$watch(attribute, function (value) {
+						    if (value === undefined) {
+						        return
+                            }
+						    value = self.getValue(this, value, attribute)
+							self.dependencyValues[component.field.attribute] = value;
 							// @todo: change value as argument for `updateDependencyStatus`
-							this.updateDependencyStatus()
+							self.updateDependencyStatus()
 						}, {immediate: true});
-
 						// @todo: move to initial state
 						// @note quick-fix for issue #88
 						if (attribute === 'fieldTypeName') {
@@ -73,6 +72,31 @@
 					callback.call(this);
 				}
 			},
+            getValue(component, value, attribute = 'value') {
+			    if (component.field.component !== 'nova-belongsto-depend') {
+			        if (attribute !== 'selectedResource') {
+			            return value;
+                    }
+			        return (value && value.value) || null
+                } else {
+			        let dependency = this.field.dependencies.find((dep) => {
+			            return dep.field === component.field.attribute
+                    })
+                    return !Array.isArray(value) && typeof value === 'object'
+                        ? value[dependency['property']]
+                        : null
+                }
+            },
+            getInitValue(component) {
+			    if (component.field.component !== 'nova-belongsto-depend') {
+			        return component.field.value
+                } else {
+			        let value = component.field.options.find(function (option) {
+			            return option[component.field.modelPrimaryKey] === component.field.valueKey
+                    })
+                    return this.getValue(component, value, 'value')
+                }
+            },
 
 			// @todo: not maintainable, move to factory
 			findWatchableComponentAttribute(component) {
