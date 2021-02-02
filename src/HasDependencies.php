@@ -97,6 +97,7 @@ trait HasDependencies
             'ResourceStoreController@handle',
             'AssociatableController@index',
             'MorphableController@index',
+            'ResourceController@dependsOnField'
         ]);
     }
 
